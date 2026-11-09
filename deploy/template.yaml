@@ -210,7 +210,8 @@ objects:
         # Uses the same RHEL image family as insights-rbac (OpenShift-compatible arbitrary UID).
         # Data is ephemeral (EmptyDir): starts clean on every pod restart, no PVC needed.
         - name: postgres
-          image: registry.redhat.io/rhel9/postgresql-16:latest
+          image: registry.redhat.io/rhel9/postgresql-16:9.5-1744136555
+          imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
