@@ -96,11 +96,17 @@ objects:
             exec bash entrypoint.sh
           securityContext:
             runAsNonRoot: true
+            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             seccompProfile:
               type: RuntimeDefault
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+          - name: bot-tmp
+            mountPath: /tmp
+          - name: bot-data
+            mountPath: /home/botuser/data
           env:
           - name: BOT_LABEL
             value: ${BOT_LABEL}
@@ -225,6 +231,7 @@ objects:
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true
+            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             seccompProfile:
               type: RuntimeDefault
@@ -248,6 +255,10 @@ objects:
           volumeMounts:
           - name: pgdata
             mountPath: /var/lib/pgsql/data
+          - name: pg-tmp
+            mountPath: /tmp
+          - name: pg-run
+            mountPath: /run/postgresql
           resources:
             requests:
               cpu: 100m
@@ -266,7 +277,15 @@ objects:
             - key: e2e-password
               path: e2e-password
             defaultMode: 0400
+        - name: bot-tmp
+          emptyDir: {}
+        - name: bot-data
+          emptyDir: {}
         - name: pgdata
+          emptyDir: {}
+        - name: pg-tmp
+          emptyDir: {}
+        - name: pg-run
           emptyDir: {}
 
 # --- NetworkPolicy: Bot can only reach proxy + memory-server + DNS ---
