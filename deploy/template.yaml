@@ -78,6 +78,22 @@ objects:
         containers:
         - name: bot
           image: ${BOT_IMAGE}:${IMAGE_TAG}
+          # FIND-004: Override entrypoint to read SSO credentials from
+          # file-mounted secrets instead of container env vars.
+          # Writes .credentials in the same format entrypoint.sh expects,
+          # then execs the original entrypoint unchanged.
+          command: ["tini", "--", "bash", "-c"]
+          args:
+          - |
+            if [ -f /run/secrets/sso/e2e-username ] && [ -f /run/secrets/sso/e2e-password ]; then
+              _u=$(cat /run/secrets/sso/e2e-username)
+              _p=$(cat /run/secrets/sso/e2e-password)
+              printf '{"sso": {"username": "%s", "password": "%s"}}\n' "$_u" "$_p" \
+                > /home/botuser/app/.credentials
+              chmod 600 /home/botuser/app/.credentials
+              unset _u _p
+            fi
+            exec bash entrypoint.sh
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -174,17 +190,8 @@ objects:
           # GH release upload — proxied through proxy container (port 8446)
           - name: GH_RELEASE_UPLOAD_URL
             value: http://devbot-proxy:8446/upload
-          # Secrets that stay in bot container (SSO for E2E)
-          - name: SSO_USERNAME
-            valueFrom:
-              secretKeyRef:
-                name: devbot-secrets
-                key: e2e-username
-          - name: SSO_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: devbot-secrets
-                key: e2e-password
+          # SSO credentials (FIND-004): mounted as files at /run/secrets/sso/
+          # instead of env vars — see command override and sso-secrets volume.
           # PostgreSQL sidecar — env vars for setup script and migration smoke tests
           - name: POSTGRES_HOST
             value: localhost
@@ -205,6 +212,10 @@ objects:
               cpu: "4"
               memory: 8Gi
               ephemeral-storage: 16Gi
+          volumeMounts:
+          - name: sso-secrets
+            mountPath: /run/secrets/sso
+            readOnly: true
 
         # PostgreSQL sidecar — shares pod network so bot reaches it at localhost:15432.
         # Uses the same RHEL image family as insights-rbac (OpenShift-compatible arbitrary UID).
@@ -246,6 +257,15 @@ objects:
               memory: 512Mi
 
         volumes:
+        - name: sso-secrets
+          secret:
+            secretName: devbot-secrets
+            items:
+            - key: e2e-username
+              path: e2e-username
+            - key: e2e-password
+              path: e2e-password
+            defaultMode: 0400
         - name: pgdata
           emptyDir: {}
 
