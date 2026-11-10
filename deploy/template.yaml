@@ -75,6 +75,21 @@ objects:
           app.kubernetes.io/component: bot
           app.kubernetes.io/part-of: devbot
       spec:
+        initContainers:
+        - name: copy-home
+          image: ${BOT_IMAGE}:${IMAGE_TAG}
+          command: ["bash", "-c", "cp -a --no-preserve=ownership /home/botuser/. /mnt/home/"]
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+          - name: bot-home
+            mountPath: /mnt/home
         containers:
         - name: bot
           image: ${BOT_IMAGE}:${IMAGE_TAG}
@@ -103,10 +118,13 @@ objects:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+          - name: bot-home
+            mountPath: /home/botuser
           - name: bot-tmp
             mountPath: /tmp
-          - name: bot-data
-            mountPath: /home/botuser/data
+          - name: sso-secrets
+            mountPath: /run/secrets/sso
+            readOnly: true
           env:
           - name: BOT_LABEL
             value: ${BOT_LABEL}
@@ -218,10 +236,6 @@ objects:
               cpu: "4"
               memory: 8Gi
               ephemeral-storage: 16Gi
-          volumeMounts:
-          - name: sso-secrets
-            mountPath: /run/secrets/sso
-            readOnly: true
 
         # PostgreSQL sidecar — shares pod network so bot reaches it at localhost:15432.
         # Uses the same RHEL image family as insights-rbac (OpenShift-compatible arbitrary UID).
@@ -254,7 +268,7 @@ objects:
             failureThreshold: 6
           volumeMounts:
           - name: pgdata
-            mountPath: /var/lib/pgsql/data
+            mountPath: /var/lib/pgsql
           - name: pg-tmp
             mountPath: /tmp
           - name: pg-run
@@ -277,9 +291,10 @@ objects:
             - key: e2e-password
               path: e2e-password
             defaultMode: 0400
+        - name: bot-home
+          emptyDir:
+            sizeLimit: 12Gi
         - name: bot-tmp
-          emptyDir: {}
-        - name: bot-data
           emptyDir: {}
         - name: pgdata
           emptyDir: {}
