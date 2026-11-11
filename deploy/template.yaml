@@ -75,21 +75,6 @@ objects:
           app.kubernetes.io/component: bot
           app.kubernetes.io/part-of: devbot
       spec:
-        initContainers:
-        - name: copy-home
-          image: ${BOT_IMAGE}:${IMAGE_TAG}
-          command: ["bash", "-c", "cp -a --no-preserve=ownership /home/botuser/. /mnt/home/"]
-          securityContext:
-            runAsNonRoot: true
-            readOnlyRootFilesystem: true
-            allowPrivilegeEscalation: false
-            seccompProfile:
-              type: RuntimeDefault
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-          - name: bot-home
-            mountPath: /mnt/home
         containers:
         - name: bot
           image: ${BOT_IMAGE}:${IMAGE_TAG}
@@ -111,20 +96,11 @@ objects:
             exec bash entrypoint.sh
           securityContext:
             runAsNonRoot: true
-            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             seccompProfile:
               type: RuntimeDefault
             capabilities:
               drop: ["ALL"]
-          volumeMounts:
-          - name: bot-home
-            mountPath: /home/botuser
-          - name: bot-tmp
-            mountPath: /tmp
-          - name: sso-secrets
-            mountPath: /run/secrets/sso
-            readOnly: true
           env:
           - name: BOT_LABEL
             value: ${BOT_LABEL}
@@ -236,6 +212,10 @@ objects:
               cpu: "4"
               memory: 8Gi
               ephemeral-storage: 16Gi
+          volumeMounts:
+          - name: sso-secrets
+            mountPath: /run/secrets/sso
+            readOnly: true
 
         # PostgreSQL sidecar — shares pod network so bot reaches it at localhost:15432.
         # Uses the same RHEL image family as insights-rbac (OpenShift-compatible arbitrary UID).
@@ -245,7 +225,6 @@ objects:
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true
-            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             seccompProfile:
               type: RuntimeDefault
@@ -268,11 +247,7 @@ objects:
             failureThreshold: 6
           volumeMounts:
           - name: pgdata
-            mountPath: /var/lib/pgsql
-          - name: pg-tmp
-            mountPath: /tmp
-          - name: pg-run
-            mountPath: /run/postgresql
+            mountPath: /var/lib/pgsql/data
           resources:
             requests:
               cpu: 100m
@@ -291,16 +266,7 @@ objects:
             - key: e2e-password
               path: e2e-password
             defaultMode: 0400
-        - name: bot-home
-          emptyDir:
-            sizeLimit: 12Gi
-        - name: bot-tmp
-          emptyDir: {}
         - name: pgdata
-          emptyDir: {}
-        - name: pg-tmp
-          emptyDir: {}
-        - name: pg-run
           emptyDir: {}
 
 # --- NetworkPolicy: Bot can only reach proxy + memory-server + DNS ---
